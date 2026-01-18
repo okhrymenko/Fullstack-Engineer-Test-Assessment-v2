@@ -1,4 +1,5 @@
 import { GraphQLError } from 'graphql';
+import { IsNull } from 'typeorm';
 import { AppDataSource } from '../config/database';
 import { SportsArticle } from '../entity/SportsArticle';
 
@@ -11,10 +12,11 @@ export const resolvers = {
   Query: {
     articles: async () => {
       try {
-        const articles = await articleRepository.find({
-          where: { deletedAt: null },
-          order: { createdAt: 'DESC' },
-        });
+        const articles = await articleRepository
+          .createQueryBuilder('article')
+          .where('article.deletedAt IS NULL')
+          .orderBy('article.createdAt', 'ASC')
+          .getMany();
         return articles.map(formatArticle);
       } catch (error) {
         throw new GraphQLError('Failed to fetch articles', {
@@ -29,12 +31,14 @@ export const resolvers = {
         const limitNum = Math.min(MAX_LIMIT, Math.max(1, limit));
         const skip = (pageNum - 1) * limitNum;
 
-        const [articles, totalCount] = await articleRepository.findAndCount({
-          where: { deletedAt: null },
-          order: { createdAt: 'DESC' },
-          skip,
-          take: limitNum,
-        });
+        const queryBuilder = articleRepository
+          .createQueryBuilder('article')
+          .where('article.deletedAt IS NULL')
+          .orderBy('article.createdAt', 'ASC')
+          .skip(skip)
+          .take(limitNum);
+
+        const [articles, totalCount] = await queryBuilder.getManyAndCount();
 
         const totalPages = Math.ceil(totalCount / limitNum);
 
@@ -57,7 +61,7 @@ export const resolvers = {
     article: async (_: unknown, { id }: { id: string }) => {
       try {
         const article = await articleRepository.findOne({
-          where: { id, deletedAt: null },
+          where: { id, deletedAt: IsNull() },
         });
 
         if (!article) {
@@ -108,7 +112,7 @@ export const resolvers = {
         validateArticleInput(input);
 
         const article = await articleRepository.findOne({
-          where: { id, deletedAt: null },
+          where: { id, deletedAt: IsNull() },
         });
 
         if (!article) {
@@ -138,7 +142,7 @@ export const resolvers = {
     deleteArticle: async (_: any, { id }: { id: string }) => {
       try {
         const article = await articleRepository.findOne({
-          where: { id, deletedAt: null },
+          where: { id, deletedAt: IsNull() },
         });
 
         if (!article) {
