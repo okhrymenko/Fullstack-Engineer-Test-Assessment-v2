@@ -59,16 +59,6 @@ To stop and remove volumes (⚠️ deletes data):
 docker-compose down -v
 ```
 
-#### Option B: Local PostgreSQL
-
-Create a PostgreSQL database:
-
-```sql
-CREATE DATABASE sports_articles;
-```
-
-Or use your preferred database management tool.
-
 ### 3. Environment Configuration
 
 #### Backend Environment
@@ -174,24 +164,6 @@ pnpm dev
 ```
 
 This will start both the backend and frontend simultaneously.
-
-### Production Build
-
-Build all applications:
-
-```bash
-pnpm build
-```
-
-Start applications:
-
-```bash
-# Backend
-cd apps/backend && pnpm start
-
-# Frontend
-cd apps/frontend && pnpm start
-```
 
 ## Database Migrations
 
