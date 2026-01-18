@@ -4,8 +4,16 @@ import { createApolloClient } from '../lib/apollo-client-ssr';
 import { GET_ARTICLES_PAGE } from '../graphql/queries';
 import { DELETE_ARTICLE } from '../graphql/mutations';
 import Link from 'next/link';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import ImageWithFallback from '../components/ImageWithFallback';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import dynamic from 'next/dynamic';
+import ArticlesGridSkeleton from '../components/ArticlesGridSkeleton';
+import LoadingSpinner from '../components/LoadingSpinner';
+
+// Dynamically import ArticlesGrid with no SSR for client-side streaming
+const ArticlesGrid = dynamic(() => import('../components/ArticlesGrid'), {
+  loading: () => <ArticlesGridSkeleton />,
+  ssr: false,
+});
 
 interface Article {
   id: string;
@@ -168,59 +176,16 @@ export default function ArticlesPage({ initialPage }: ArticlesPageProps) {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allArticles.map((article) => (
-                <div
-                  key={article.id}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-                >
-                  <ImageWithFallback
-                    src={article.imageUrl}
-                    alt={article.title}
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className="p-6">
-                    <h2 className="text-xl font-semibold mb-2 text-gray-900 line-clamp-2">
-                      {article.title}
-                    </h2>
-                    <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                      {article.content}
-                    </p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">
-                        {new Date(article.createdAt).toLocaleDateString()}
-                      </span>
-                      <div className="flex gap-2">
-                        <Link
-                          href={`/article/${article.id}`}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                        >
-                          View
-                        </Link>
-                        <Link
-                          href={`/edit/${article.id}`}
-                          className="text-green-600 hover:text-green-800 text-sm font-medium"
-                        >
-                          Edit
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(article.id)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Suspense fallback={<ArticlesGridSkeleton />}>
+              <ArticlesGrid articles={allArticles} onDelete={handleDelete} />
+            </Suspense>
 
             {/* Infinite scroll trigger */}
-            <div ref={observerTarget} className="h-10 flex items-center justify-center mt-8">
+            <div ref={observerTarget} className="h-20 flex items-center justify-center mt-8">
               {loading && hasMore && (
-                <div className="text-center py-4">
-                  <p className="text-gray-500">Loading more articles...</p>
+                <div className="flex flex-col items-center justify-center gap-3 py-4">
+                  <LoadingSpinner size="lg" />
+                  <p className="text-gray-500 text-sm">Loading more articles...</p>
                 </div>
               )}
               {!hasMore && allArticles.length > 0 && (
