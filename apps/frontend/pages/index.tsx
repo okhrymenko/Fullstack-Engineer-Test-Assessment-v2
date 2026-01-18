@@ -6,6 +6,7 @@ import { DELETE_ARTICLE } from '../graphql/mutations';
 import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ImageWithFallback from '../components/ImageWithFallback';
+import Spinner from '../components/Spinner';
 
 interface Article {
   id: string;
@@ -146,6 +147,7 @@ export default function ArticlesPage({ initialPage }: ArticlesPageProps) {
           <h1 className="text-3xl font-bold text-gray-900">Sports Articles</h1>
           <Link
             href="/create"
+            prefetch={true}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
           >
             Create Article
@@ -174,18 +176,26 @@ export default function ArticlesPage({ initialPage }: ArticlesPageProps) {
                   key={article.id}
                   className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
                 >
-                  <ImageWithFallback
-                    src={article.imageUrl}
-                    alt={article.title}
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className="p-6">
-                    <h2 className="text-xl font-semibold mb-2 text-gray-900 line-clamp-2">
-                      {article.title}
-                    </h2>
-                    <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                      {article.content}
-                    </p>
+                  <Link
+                    href={`/article/${article.id}`}
+                    prefetch={true}
+                    className="block"
+                  >
+                    <ImageWithFallback
+                      src={article.imageUrl}
+                      alt={article.title}
+                      className="w-full h-48 object-cover"
+                    />
+                    <div className="p-6">
+                      <h2 className="text-xl font-semibold mb-2 text-gray-900 line-clamp-2 hover:text-blue-600 transition-colors">
+                        {article.title}
+                      </h2>
+                      <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+                        {article.content}
+                      </p>
+                    </div>
+                  </Link>
+                  <div className="px-6 pb-6">
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-gray-500">
                         {new Date(article.createdAt).toLocaleDateString()}
@@ -193,18 +203,23 @@ export default function ArticlesPage({ initialPage }: ArticlesPageProps) {
                       <div className="flex gap-2">
                         <Link
                           href={`/article/${article.id}`}
+                          prefetch={true}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                         >
                           View
                         </Link>
                         <Link
                           href={`/edit/${article.id}`}
+                          prefetch={true}
                           className="text-green-600 hover:text-green-800 text-sm font-medium"
                         >
                           Edit
                         </Link>
                         <button
-                          onClick={() => handleDelete(article.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(article.id);
+                          }}
                           className="text-red-600 hover:text-red-800 text-sm font-medium"
                         >
                           Delete
@@ -217,10 +232,11 @@ export default function ArticlesPage({ initialPage }: ArticlesPageProps) {
             </div>
 
             {/* Infinite scroll trigger */}
-            <div ref={observerTarget} className="h-10 flex items-center justify-center mt-8">
+            <div ref={observerTarget} className="h-20 flex items-center justify-center mt-8">
               {loading && hasMore && (
-                <div className="text-center py-4">
-                  <p className="text-gray-500">Loading more articles...</p>
+                <div className="flex flex-col items-center justify-center gap-3 py-4">
+                  <Spinner size="lg" />
+                  <p className="text-gray-500 text-sm">Loading more articles...</p>
                 </div>
               )}
               {!hasMore && allArticles.length > 0 && (
