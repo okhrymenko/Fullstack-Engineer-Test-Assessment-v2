@@ -49,6 +49,7 @@ export default function ArticlePage({ initialArticle }: ArticlePageProps) {
           </p>
           <Link
             href="/"
+            prefetch={true}
             className="text-blue-600 hover:text-blue-800 font-medium"
           >
             ← Back to Articles
@@ -63,6 +64,7 @@ export default function ArticlePage({ initialArticle }: ArticlePageProps) {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
+          prefetch={true}
           className="text-blue-600 hover:text-blue-800 font-medium mb-6 inline-block"
         >
           ← Back to Articles
@@ -91,6 +93,7 @@ export default function ArticlePage({ initialArticle }: ArticlePageProps) {
             <div className="mt-8 pt-6 border-t border-gray-200">
               <Link
                 href={`/edit/${article.id}`}
+                prefetch={true}
                 className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors mr-4"
               >
                 Edit Article

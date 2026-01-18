@@ -63,6 +63,7 @@ export default function CreateArticlePage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
+          prefetch={true}
           className="text-blue-600 hover:text-blue-800 font-medium mb-6 inline-block"
         >
           ← Back to Articles
@@ -140,6 +141,7 @@ export default function CreateArticlePage() {
               </button>
               <Link
                 href="/"
+                prefetch={true}
                 className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-lg transition-colors"
               >
                 Cancel
