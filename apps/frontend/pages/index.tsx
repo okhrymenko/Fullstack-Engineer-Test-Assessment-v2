@@ -1,11 +1,10 @@
 import { GetServerSideProps } from 'next';
 import { useQuery, useMutation } from '@apollo/client';
-import { useRouter } from 'next/router';
 import { createApolloClient } from '../lib/apollo-client-ssr';
 import { GET_ARTICLES_PAGE } from '../graphql/queries';
 import { DELETE_ARTICLE } from '../graphql/mutations';
 import Link from 'next/link';
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ImageWithFallback from '../components/ImageWithFallback';
 
 interface Article {
@@ -30,40 +29,108 @@ interface ArticlesPageData {
 
 interface ArticlesPageProps {
   initialPage: ArticlesPageData['articlesPage'];
-  initialPageNum: number;
 }
 
 const PAGE_SIZE = 10;
 
-export default function ArticlesPage({ initialPage, initialPageNum }: ArticlesPageProps) {
-  const router = useRouter();
+export default function ArticlesPage({ initialPage }: ArticlesPageProps) {
   const [error, setError] = useState<string | null>(null);
-  const pageNum = useMemo(
-    () => (typeof router.query.page === 'string' ? parseInt(router.query.page, 10) : initialPageNum),
-    [router.query.page, initialPageNum]
-  );
-  const safePage = isNaN(pageNum) || pageNum < 1 ? 1 : pageNum;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(initialPage.hasNextPage);
+  const observerTarget = useRef<HTMLDivElement>(null);
+  const deletedArticleId = useRef<string | null>(null);
 
-  const { data, loading, refetch } = useQuery<ArticlesPageData>(GET_ARTICLES_PAGE, {
-    variables: { page: safePage, limit: PAGE_SIZE },
+  const { data, loading, fetchMore } = useQuery<ArticlesPageData>(GET_ARTICLES_PAGE, {
+    variables: { page: 1, limit: PAGE_SIZE },
     ssr: false,
+    notifyOnNetworkStatusChange: true,
   });
 
-  const page = data?.articlesPage || initialPage;
-  const articles = page.articles;
+  // Get all articles from Apollo cache or use initial data
+  const allArticles = data?.articlesPage?.articles || initialPage.articles;
+
+  // Update hasMore and currentPage when data changes
+  useEffect(() => {
+    if (data?.articlesPage) {
+      setHasMore(data.articlesPage.hasNextPage);
+      setCurrentPage(data.articlesPage.page);
+    }
+  }, [data]);
+
+  // Load more articles when scrolling to bottom
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore) return;
+
+    try {
+      await fetchMore({
+        variables: {
+          page: currentPage + 1,
+          limit: PAGE_SIZE,
+        },
+        updateQuery: (prev, { fetchMoreResult }) => {
+          if (!fetchMoreResult?.articlesPage) return prev;
+
+          return {
+            articlesPage: {
+              ...fetchMoreResult.articlesPage,
+              articles: [
+                ...prev.articlesPage.articles,
+                ...fetchMoreResult.articlesPage.articles,
+              ],
+            },
+          };
+        },
+      });
+    } catch (err) {
+      console.error('Error loading more articles:', err);
+    }
+  }, [currentPage, hasMore, loading, fetchMore]);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [hasMore, loading, loadMore]);
 
   const [deleteArticle] = useMutation(DELETE_ARTICLE, {
     onCompleted: () => {
-      refetch();
       setError(null);
+      deletedArticleId.current = null;
+      // Reset pagination state after delete
+      setCurrentPage(1);
     },
     onError: (err) => {
       setError(err.message || 'Failed to delete article');
+      deletedArticleId.current = null;
     },
+    refetchQueries: [
+      {
+        query: GET_ARTICLES_PAGE,
+        variables: { page: 1, limit: PAGE_SIZE },
+      },
+    ],
   });
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this article?')) {
+      deletedArticleId.current = id;
       try {
         await deleteArticle({ variables: { id } });
       } catch (err) {
@@ -91,91 +158,77 @@ export default function ArticlesPage({ initialPage, initialPageNum }: ArticlesPa
           </div>
         )}
 
-        {loading && !data ? (
+        {!data && loading ? (
           <div className="text-center py-12">
             <p className="text-gray-500">Loading articles...</p>
           </div>
-        ) : articles.length === 0 ? (
+        ) : allArticles.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">No articles found. Create your first article!</p>
           </div>
         ) : (
           <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {articles.map((article) => (
-              <div
-                key={article.id}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-              >
-                <ImageWithFallback
-                  src={article.imageUrl}
-                  alt={article.title}
-                  className="w-full h-48 object-cover"
-                />
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold mb-2 text-gray-900 line-clamp-2">
-                    {article.title}
-                  </h2>
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                    {article.content}
-                  </p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">
-                      {new Date(article.createdAt).toLocaleDateString()}
-                    </span>
-                    <div className="flex gap-2">
-                      <Link
-                        href={`/article/${article.id}`}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                      >
-                        View
-                      </Link>
-                      <Link
-                        href={`/edit/${article.id}`}
-                        className="text-green-600 hover:text-green-800 text-sm font-medium"
-                      >
-                        Edit
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(article.id)}
-                        className="text-red-600 hover:text-red-800 text-sm font-medium"
-                      >
-                        Delete
-                      </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {allArticles.map((article) => (
+                <div
+                  key={article.id}
+                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+                >
+                  <ImageWithFallback
+                    src={article.imageUrl}
+                    alt={article.title}
+                    className="w-full h-48 object-cover"
+                  />
+                  <div className="p-6">
+                    <h2 className="text-xl font-semibold mb-2 text-gray-900 line-clamp-2">
+                      {article.title}
+                    </h2>
+                    <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+                      {article.content}
+                    </p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500">
+                        {new Date(article.createdAt).toLocaleDateString()}
+                      </span>
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/article/${article.id}`}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                          View
+                        </Link>
+                        <Link
+                          href={`/edit/${article.id}`}
+                          className="text-green-600 hover:text-green-800 text-sm font-medium"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(article.id)}
+                          className="text-red-600 hover:text-red-800 text-sm font-medium"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          {page.totalPages > 1 && (
-            <nav className="mt-8 flex items-center justify-center gap-2" aria-label="Pagination">
-              <Link
-                href={page.hasPrevPage ? `/?page=${page.page - 1}` : '/?page=1'}
-                className={`px-4 py-2 rounded-lg font-medium ${
-                  page.hasPrevPage
-                    ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
-                }`}
-              >
-                Previous
-              </Link>
-              <span className="px-4 py-2 text-gray-600">
-                Page {page.page} of {page.totalPages} ({page.totalCount} articles)
-              </span>
-              <Link
-                href={page.hasNextPage ? `/?page=${page.page + 1}` : `/?page=${page.totalPages}`}
-                className={`px-4 py-2 rounded-lg font-medium ${
-                  page.hasNextPage
-                    ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
-                }`}
-              >
-                Next
-              </Link>
-            </nav>
-          )}
+            {/* Infinite scroll trigger */}
+            <div ref={observerTarget} className="h-10 flex items-center justify-center mt-8">
+              {loading && hasMore && (
+                <div className="text-center py-4">
+                  <p className="text-gray-500">Loading more articles...</p>
+                </div>
+              )}
+              {!hasMore && allArticles.length > 0 && (
+                <div className="text-center py-4">
+                  <p className="text-gray-500">No more articles to load</p>
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -183,22 +236,18 @@ export default function ArticlesPage({ initialPage, initialPageNum }: ArticlesPa
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
+export const getServerSideProps: GetServerSideProps = async () => {
   const apolloClient = createApolloClient();
-  const pageParam = context.query.page;
-  const pageNum = typeof pageParam === 'string' ? parseInt(pageParam, 10) : 1;
-  const safePage = isNaN(pageNum) || pageNum < 1 ? 1 : pageNum;
 
   try {
     const { data } = await apolloClient.query({
       query: GET_ARTICLES_PAGE,
-      variables: { page: safePage, limit: PAGE_SIZE },
+      variables: { page: 1, limit: PAGE_SIZE },
     });
 
     return {
       props: {
         initialPage: data.articlesPage,
-        initialPageNum: safePage,
       },
     };
   } catch (error) {
@@ -214,7 +263,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           hasNextPage: false,
           hasPrevPage: false,
         },
-        initialPageNum: 1,
       },
     };
   }
