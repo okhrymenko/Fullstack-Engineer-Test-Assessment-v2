@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { createApolloClient } from '../../lib/apollo-client-ssr';
 import { GET_ARTICLE } from '../../graphql/queries';
 import Link from 'next/link';
+import ImageWithFallback from '../../components/ImageWithFallback';
 
 interface Article {
   id: string;
@@ -68,13 +69,11 @@ export default function ArticlePage({ initialArticle }: ArticlePageProps) {
         </Link>
 
         <article className="bg-white rounded-lg shadow-md overflow-hidden">
-          {article.imageUrl && (
-            <img
-              src={article.imageUrl}
-              alt={article.title}
-              className="w-full h-96 object-cover"
-            />
-          )}
+          <ImageWithFallback
+            src={article.imageUrl}
+            alt={article.title}
+            className="w-full h-96 object-cover"
+          />
           <div className="p-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-4">{article.title}</h1>
             <div className="text-sm text-gray-500 mb-6">

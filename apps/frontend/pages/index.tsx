@@ -6,6 +6,7 @@ import { GET_ARTICLES_PAGE } from '../graphql/queries';
 import { DELETE_ARTICLE } from '../graphql/mutations';
 import Link from 'next/link';
 import { useState, useMemo } from 'react';
+import ImageWithFallback from '../components/ImageWithFallback';
 
 interface Article {
   id: string;
@@ -106,13 +107,11 @@ export default function ArticlesPage({ initialPage, initialPageNum }: ArticlesPa
                 key={article.id}
                 className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
               >
-                {article.imageUrl && (
-                  <img
-                    src={article.imageUrl}
-                    alt={article.title}
-                    className="w-full h-48 object-cover"
-                  />
-                )}
+                <ImageWithFallback
+                  src={article.imageUrl}
+                  alt={article.title}
+                  className="w-full h-48 object-cover"
+                />
                 <div className="p-6">
                   <h2 className="text-xl font-semibold mb-2 text-gray-900 line-clamp-2">
                     {article.title}
