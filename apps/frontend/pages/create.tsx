@@ -1,60 +1,70 @@
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useMutation } from '@apollo/client';
 import { useRouter } from 'next/router';
 import { CREATE_ARTICLE } from '../graphql/mutations';
 import Link from 'next/link';
+import Snackbar from '../components/Snackbar';
+
+interface ArticleFormData {
+  title: string;
+  content: string;
+  imageUrl?: string;
+}
 
 export default function CreateArticlePage() {
   const router = useRouter();
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [errors, setErrors] = useState<{ title?: string; content?: string; general?: string }>({});
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  const [createArticle, { loading }] = useMutation(CREATE_ARTICLE, {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ArticleFormData>({
+    defaultValues: {
+      title: '',
+      content: '',
+      imageUrl: '',
+    },
+  });
+
+  const [createArticle] = useMutation(CREATE_ARTICLE, {
     onCompleted: (data) => {
       router.push(`/article/${data.createArticle.id}`);
     },
     onError: (error) => {
-      setErrors({ general: error.message || 'Failed to create article' });
+      // Extract error message from GraphQL error
+      const errorMessage =
+        error.graphQLErrors?.[0]?.message ||
+        error.networkError?.message ||
+        error.message ||
+        'Failed to create article';
+      setSnackbarMessage(errorMessage);
+      setSnackbarOpen(true);
     },
   });
 
-  const validate = () => {
-    const newErrors: { title?: string; content?: string } = {};
-
-    if (!title.trim()) {
-      newErrors.title = 'Title is required';
-    }
-
-    if (!content.trim()) {
-      newErrors.content = 'Content is required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrors({});
-
-    if (!validate()) {
-      return;
-    }
-
+  const onSubmit = async (data: ArticleFormData) => {
     try {
       await createArticle({
         variables: {
           input: {
-            title: title.trim(),
-            content: content.trim(),
-            imageUrl: imageUrl.trim() || undefined,
+            title: data.title.trim(),
+            content: data.content.trim(),
+            imageUrl: data.imageUrl?.trim() || undefined,
           },
         },
       });
-    } catch (err) {
-      // Error handled in onError
+    } catch (err: any) {
+      // Fallback error handling in case onError doesn't catch it
+      const errorMessage =
+        err?.graphQLErrors?.[0]?.message ||
+        err?.networkError?.message ||
+        err?.message ||
+        'Failed to create article';
+      setSnackbarMessage(errorMessage);
+      setSnackbarOpen(true);
     }
   };
 
@@ -72,13 +82,7 @@ export default function CreateArticlePage() {
         <div className="bg-white rounded-lg shadow-md p-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">Create New Article</h1>
 
-          {errors.general && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {errors.general}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit(onSubmit)}>
             <div className="mb-6">
               <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
                 Title <span className="text-red-500">*</span>
@@ -86,15 +90,17 @@ export default function CreateArticlePage() {
               <input
                 type="text"
                 id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                {...register('title', {
+                  required: 'Title is required',
+                  validate: (value) => value.trim().length > 0 || 'Title cannot be empty',
+                })}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                   errors.title ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter article title"
               />
               {errors.title && (
-                <p className="mt-1 text-sm text-red-600">{errors.title}</p>
+                <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
               )}
             </div>
 
@@ -104,16 +110,18 @@ export default function CreateArticlePage() {
               </label>
               <textarea
                 id="content"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
                 rows={10}
+                {...register('content', {
+                  required: 'Content is required',
+                  validate: (value) => value.trim().length > 0 || 'Content cannot be empty',
+                })}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                   errors.content ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter article content"
               />
               {errors.content && (
-                <p className="mt-1 text-sm text-red-600">{errors.content}</p>
+                <p className="mt-1 text-sm text-red-600">{errors.content.message}</p>
               )}
             </div>
 
@@ -124,8 +132,7 @@ export default function CreateArticlePage() {
               <input
                 type="url"
                 id="imageUrl"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
+                {...register('imageUrl')}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="https://example.com/image.jpg"
               />
@@ -134,10 +141,10 @@ export default function CreateArticlePage() {
             <div className="flex gap-4">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={isSubmitting}
                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
               >
-                {loading ? 'Creating...' : 'Create Article'}
+                {isSubmitting ? 'Creating...' : 'Create Article'}
               </button>
               <Link
                 href="/"
@@ -149,6 +156,13 @@ export default function CreateArticlePage() {
             </div>
           </form>
         </div>
+
+        <Snackbar
+          message={snackbarMessage}
+          type="error"
+          isOpen={snackbarOpen}
+          onClose={() => setSnackbarOpen(false)}
+        />
       </div>
     </div>
   );
