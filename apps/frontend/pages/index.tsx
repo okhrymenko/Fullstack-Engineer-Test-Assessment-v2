@@ -1,7 +1,7 @@
 import { GetServerSideProps } from 'next';
 import { useQuery, useMutation } from '@apollo/client';
 import { createApolloClient } from '../lib/apollo-client-ssr';
-import { GET_ARTICLES_PAGE } from '../graphql/queries';
+import { GET_ARTICLES, GET_ARTICLES_PAGE } from '../graphql/queries';
 import { DELETE_ARTICLE } from '../graphql/mutations';
 import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
@@ -205,14 +205,27 @@ export const getServerSideProps: GetServerSideProps = async () => {
   const apolloClient = createApolloClient();
 
   try {
+    // Use the required 'articles' query for SSR and take first 10
     const { data } = await apolloClient.query({
-      query: GET_ARTICLES_PAGE,
-      variables: { page: 1, limit: PAGE_SIZE },
+      query: GET_ARTICLES,
     });
+
+    const allArticles = data.articles || [];
+    const first10Articles = allArticles.slice(0, PAGE_SIZE);
+    const totalCount = allArticles.length;
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
     return {
       props: {
-        initialPage: data.articlesPage,
+        initialPage: {
+          articles: first10Articles,
+          totalCount,
+          page: 1,
+          limit: PAGE_SIZE,
+          totalPages,
+          hasNextPage: totalPages > 1,
+          hasPrevPage: false,
+        },
       },
     };
   } catch (error) {
